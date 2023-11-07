@@ -8,7 +8,7 @@ using Plots
 Pkg.add("AmplNLWriter")
 using AmplNLWriter
 #definición matriz de salidas
-salidas=zeros(10,10)
+salidas=zeros(30,30)
 
 
 #función clasificación de los datos
@@ -37,14 +37,14 @@ end
 
 i=0;
 j=0;
-for dim in 1:5:50
+for dim in 100:100:3000
     #para una dimensión fijada, seleccionamos un hiperplano que nos permita clasificar los datos
     #de entrenamiento que vamos a generar en el siguiente bucle
     vect_hiperplano=rand(-50:50,dim) 
     term_ind_hiperplano=rand(-50:50,1)
     i=i+1
     j=0
-    for nobs in 1:50:500
+    for nobs in 30:30:900
         j=j+1
         data=rand(-30:30,nobs,dim)
 
