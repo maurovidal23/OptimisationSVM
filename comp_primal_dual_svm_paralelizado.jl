@@ -7,11 +7,16 @@ Pkg.add("Plots")
 using Plots
 Pkg.add("AmplNLWriter")
 using AmplNLWriter
-import Random
+
+using Base.Threads
+
+Pkg.add("ThreadsX")
+using ThreadsX
+using Random
+
 # Fijar la semilla
 seed = 42
 rng = Random.MersenneTwister(seed)
-
 
 #definición matriz de salidas
 salidas=zeros(20,20)
@@ -41,6 +46,41 @@ function entrenamiento(data,vect_hiperplano,term_ind_hiperplano)
 end
 
 
+#Funcion que resuelve el modelo primal
+function  resolver_primal(data,y)
+    nobs=length(data[:,1])
+    dim=length(data[1,:])
+    #model_primal1=Model(HiGHS.Optimizer)
+    println("resolviendo primal")
+     model_primal1=Model(() -> AmplNLWriter.Optimizer("bonmin"))
+    @variable(model_primal1,w[1:dim])
+    @variable(model_primal1,b)
+    @objective(model_primal1,Min,0.5*sum(w.^2))
+    @constraint(model_primal1,primal_c[i=1:nobs],y[i]*(b+sum(w.*data[i,:]))-1>=0)
+    #print(model_primal1)
+    time_primal=@elapsed optimize!(model_primal1)
+    return time_primal
+    #println("timePrimal=",time_primal)
+   
+end
+
+#Funcion que resuelve el modelo dual
+function  resolver_dual(data,y)
+    nobs=length(data[:,1])
+    dim=length(data[1,:])
+    println("resolviendo dual")
+     #model_dual1=Model(HiGHS.Optimizer)
+     model_dual1=Model(() -> AmplNLWriter.Optimizer("bonmin"))
+     @variable(model_dual1,u[1:nobs]>=0)
+     @objective(model_dual1,Max,sum(u)-0.5*sum(kron(u,transpose(u)).*kron(y,transpose(y)).*(data*transpose(data))))
+     @constraint(model_dual1,sum(y.*u)==0)
+     #print(model_dual1)
+     time_dual=@elapsed optimize!(model_dual1)
+     return time_dual
+     #println("timeDual=",time_dual)
+     
+end
+
 i=0;
 j=0;
 for dim in 30:30:600
@@ -51,39 +91,28 @@ for dim in 30:30:600
     i=i+1
     j=0
     for nobs in 10:10:200
+        
         j=j+1
         data=rand(rng,-30:30,nobs,dim)
-
         #Necesito función para clasificar y
         y=entrenamiento(data,vect_hiperplano,term_ind_hiperplano)
         
         
-        #Modelo_primal
+        # Crear hilos para los modelos primal y dual
+        hilo_primal = Threads.@spawn resolver_primal(data, y)
+        hilo_dual = Threads.@spawn resolver_dual(data, y)
         
-        #model_primal1=Model(HiGHS.Optimizer)
-        model_primal1=Model(() -> AmplNLWriter.Optimizer("bonmin"))
-
-
-        @variable(model_primal1,w[1:dim])
-        @variable(model_primal1,b)
-        @objective(model_primal1,Min,0.5*sum(w.^2))
-        @constraint(model_primal1,primal_c[i=1:nobs],y[i]*(b+sum(w.*data[i,:]))-1>=0)
-        #print(model_primal1)
-        time_primal=@elapsed optimize!(model_primal1)
+       
         
-        #Modelo_dual
+        # Esperar a que uno de los hilos termine
+
+        wait(hilo_primal)
+        wait(hilo_dual)
         
-        #model_dual1=Model(HiGHS.Optimizer)
-        model_dual1=Model(() -> AmplNLWriter.Optimizer("bonmin"))
-        @variable(model_dual1,u[1:nobs]>=0)
-        @objective(model_dual1,Max,sum(u)-0.5*sum(kron(u,transpose(u)).*kron(y,transpose(y)).*(data*transpose(data))))
-        @constraint(model_dual1,sum(y.*u)==0)
-        #print(model_dual1)
-        time_dual=@elapsed optimize!(model_dual1)
+        time_primal=hilo_primal.result
+        time_dual=hilo_dual.result
 
-        print("Time primal:", time_primal, " Time dual:", time_dual)
-
-        #Consideramos que gana el dual si esta por debajo de un 90% del tiempo del primal
+        #decimos que el dual gana al primal si tarda menos del 90% del primal
         if time_dual<time_primal*0.9
             salidas[i,j]=1
         else
@@ -107,3 +136,5 @@ scatter!([c[2] for c in coordenadas_1], [c[1] for c in coordenadas_1] , color=:r
 
 # Muestra el gráfico
 display(plot)
+
+
