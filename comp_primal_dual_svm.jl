@@ -83,6 +83,7 @@ for dim in 30:30:600
 
         print("Time primal:", time_primal, " Time dual:", time_dual)
 
+        
         #Consideramos que gana el dual si esta por debajo de un 90% del tiempo del primal
         if time_dual<time_primal*0.9
             salidas[i,j]=1
