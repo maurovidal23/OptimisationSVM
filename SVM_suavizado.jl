@@ -18,12 +18,7 @@ using Random
 seed = 42
 rng = Random.MersenneTwister(seed)
 
-#dimension de la matriz de salidas
 
-dim_matriz=40
-
-#definición matriz de salidas
-salidas=zeros(dim_matriz,dim_matriz)
 
 
 #función clasificación de los datos
@@ -85,23 +80,25 @@ function  resolver_dual(data,y)
      
 end
 
+
 #definición matriz de salidas
-data_suavizados=zeros(dim_matriz^2,2)
+data_suavizados=zeros(20*20,2)
 #clasificacion entrenamiento
-y_entre_suavizado=zeros(dim_matriz^2)
+y_entre_suavizado=zeros(20*20)
 i=0;
 j=0;
 k=0;
-for dim in 25:25:25*dim_matriz
+for dim in 2:2:40
     #para una dimensión fijada, seleccionamos un hiperplano que nos permita clasificar los datos
     #de entrenamiento que vamos a generar en el siguiente bucle
     vect_hiperplano=rand(rng,-50:50,dim) 
     term_ind_hiperplano=rand(rng,-50:50,1)
     i=i+1
     j=0
-    for nobs in 10:10:10*dim_matriz
-        k=k+1
+    for nobs in 1:20
+        
         j=j+1
+        k=k+1
         data=rand(rng,-30:30,nobs,dim)
         #Necesito función para clasificar y
         y=entrenamiento(data,vect_hiperplano,term_ind_hiperplano)
@@ -123,26 +120,13 @@ for dim in 25:25:25*dim_matriz
         data_suavizados[k,:]=[dim,nobs]
         #decimos que el dual gana al primal si tarda menos del 90% del primal
         if time_dual<time_primal*0.9
-            salidas[i,j]=1
             y_entre_suavizado[k]=1
         else
-            salidas[i,j]=0
             y_entre_suavizado[k]=-1
         end
     end
 end
 
-# Encuentra las coordenadas de los puntos 0 y 1 en la matriz
-coordenadas_0 = findall(x -> x == -1, y_entre_suavizado)
-coordenadas_1 = findall(x -> x == 1, y_entre_suavizado)
-
-
-# Crea un nuevo gráfico y agrega puntos azules y rojos
-scatter([data_suavizados[c,1] for c in coordenadas_0], [data_suavizados[c,2] for c in coordenadas_0], color=:blue, legend=false, aspect_ratio=1)
-scatter!([data_suavizados[c,1] for c in coordenadas_1], [data_suavizados[c,2] for c in coordenadas_1], color=:red)
-# Establecer los límites en los ejes x e y
-ylims!(0, 10*dim_matriz+2 )  # Límites del eje x: de 0 a 6
-xlims!(0, 25*dim_matriz+2)  # Límites del eje y: de 0 a 20
 # Encuentra las coordenadas de los puntos 0 y 1 en la matriz
 coordenadas_0 = findall(x -> x == 0, salidas)
 coordenadas_1 = findall(x -> x == 1, salidas)
@@ -160,35 +144,62 @@ scatter!([c[2] for c in coordenadas_1], [c[1] for c in coordenadas_1] , color=:r
 display(plot)
 
 
-#escritura en texto de los datos para aplicar en AMPL
+#CLASIFICACIÓN SUAVE PROBLEMA primal
 
-#constantes
-M=1
-l=1
-nobs=length(data_suavizados[:,1])
-dim=length(data_suavizados[1,:])
 
 # Abre un archivo en modo escritura
 filename = "datos.txt"
 file = open(filename, "w")
 
 # Escribe cada elemento del vector en una línea del archivo
-println(file,"param nobs:= ", nobs,";")
-println(file, "param dim:= ", 2,";")
-println(file,"param data: 1 2:=")
-for i in 1:nobs-1
-    println(file,i," ",data_suavizados[i,1]," ",data_suavizados[i,2])
-end
-println(file, nobs," ",data_suavizados[nobs,1], " ", data_suavizados[nobs,2],";")
 
-println(file)
-# Escribe cada elemento del vector en una línea del archivo
-print(file,"param y:=")
 for i in 1:nobs
-    print(file," ",i," ",y_entre_suavizado[i])
+    println(file," ",i," ",data_suavizados[i,1]," ",data_suavizados[i,2])
 end
-print(file,";")
 
 
 # Cierra el archivo
 close(file)
+
+#Abre un archivo en modo escritura
+# Abre un archivo en modo escritura
+filename = "clasificación_datos_entrenamiento.txt"
+file = open(filename, "w")
+
+# Escribe cada elemento del vector en una línea del archivo
+for i in 1:nobs
+    print(file,i," ",y_entre_suavizado[i], " ")
+end
+
+# Cierra el archivo
+close(file)
+
+
+#constantes
+M=1
+l=1
+nobs=length(data_suavizados[:,1])
+dim=length(data_suavizados[1,:])
+#entrenamiento
+data=data_suavizados
+y=y_entre_suavizado
+
+#modelo suavizado
+model_primal_SVM_suavizado=Model(() -> AmplNLWriter.Optimizer("bonmin"))
+@variable(model_primal_SVM_suavizado,w[1:dim])
+@variable(model_primal_SVM_suavizado,b)
+@variable(model_primal_SVM_suavizado,s[1:nobs])
+@objective(model_primal_SVM_suavizado,Min,0.5*sum(w.^2)+M/l*sum(s))
+@constraint(model_primal_SVM_suavizado,primal_c[i=1:nobs],y[i]*(b+sum(w.*data[i,:]))-1>=-s[i])
+@constraint(model_primal_SVM_suavizado,constrain_s[i=1:nobs],s[i]>=0)
+print(model_primal_SVM_suavizado)
+optimize!(model_primal_SVM_suavizado)
+termination_status(model_primal_SVM_suavizado)
+#definimos el w de la resolucion
+for i in 1:dim
+    print(value(w[i]), " ")
+end
+
+
+
+

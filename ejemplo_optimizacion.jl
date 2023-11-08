@@ -73,7 +73,5 @@ for d in 1:dim
 end
 
 
-print(mostrar_w_dual(nobs,dim,y,data))
 
-@time_opti
 

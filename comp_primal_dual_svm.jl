@@ -12,9 +12,12 @@ import Random
 seed = 42
 rng = Random.MersenneTwister(seed)
 
+#dimension de la matriz de salidas
+
+dim_matriz=10
 
 #definición matriz de salidas
-salidas=zeros(20,20)
+salidas=zeros(dim_matriz,dim_ma)
 
 
 #función clasificación de los datos
@@ -41,16 +44,21 @@ function entrenamiento(data,vect_hiperplano,term_ind_hiperplano)
 end
 
 
+#definición matriz de salidas
+data_suavizados=zeros(dim_matriz^2,2)
+#clasificacion entrenamiento
+y_entre_suavizado=zeros(dim_matriz^2)
 i=0;
 j=0;
-for dim in 30:30:600
+k=0;
+for dim in 1:dim_matriz
     #para una dimensión fijada, seleccionamos un hiperplano que nos permita clasificar los datos
     #de entrenamiento que vamos a generar en el siguiente bucle
     vect_hiperplano=rand(rng,-50:50,dim) 
     term_ind_hiperplano=rand(rng,-50:50,1)
     i=i+1
     j=0
-    for nobs in 10:10:200
+    for nobs in 1:dim_matriz
         j=j+1
         data=rand(rng,-30:30,nobs,dim)
 
@@ -108,3 +116,33 @@ scatter!([c[2] for c in coordenadas_1], [c[1] for c in coordenadas_1] , color=:r
 
 # Muestra el gráfico
 display(plot)
+
+
+#escritura en texto de los datos para aplicar en AMPL
+
+#constantes
+M=1
+l=1
+nobs=length(data_suavizados[:,1])
+dim=length(data_suavizados[1,:])
+
+# Abre un archivo en modo escritura
+filename = "datos.txt"
+file = open(filename, "w")
+
+# Escribe cada elemento del vector en una línea del archivo
+println(file,"param nobs:= ", nobs,";")
+println(file, "param dim:= ", 4,";")
+println(file,"param data: 1 2:=")
+for i in 1:nobs-1
+    println(file,i," ",data_suavizados[i,1]," ",data_suavizados[i,2])
+end
+println(file, nobs," ",data_suavizados[nobs,1], " ", data_suavizados[i,2])
+
+println(file)
+println(file,"y:= ",y_entre_suavizado)
+
+
+
+# Cierra el archivo
+close(file)
